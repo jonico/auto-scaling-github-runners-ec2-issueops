@@ -1,0 +1,236 @@
+name: "Approve self-hosted runner scale set deletion/archival request"
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  prechecks:
+    name: "Check pre-conditions for self hosted runner scale set deletion"
+    if: github.event.issue.pull_request != null && startsWith(github.event.issue.title, 'Delete and archive self hosted runner scale set for env ') && startsWith(github.event.comment.body, '/approve')
+    runs-on: self-hosted
+    outputs:
+      environment: ${{ steps.prechecks.outputs.environment }}
+    steps:
+    - name: Debug
+      uses: actions/github-script@v3
+      with:
+        script: console.log(JSON.stringify(context, null, 2));
+    - name: Check permissions and scan environment
+      id: prechecks
+      uses: actions/github-script@v3
+      env:
+        title: ${{ github.event.issue.title }}
+        comment: ${{ github.event.issue.body }}
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const { title } = process.env;
+          let envMatch = title.match(/^Delete and archive self hosted runner scale set for env ([a-zA-Z0-9_]+)$/)
+          if(!envMatch || envMatch[1].trim() === '') {
+            message = '👋  @' + context.actor + ', seems as if you have not specified an environment in the issue title, please make sure to follow the issue template for self hosted runner scale set deletion.'
+            core.setOutput('error', message)
+            throw new Error(message)
+          }
+          const environment = envMatch[1]
+          core.info("environment: " + environment)
+          const permissionRes = await github.repos.getCollaboratorPermissionLevel(
+            {
+              ...context.repo,
+              username: context.actor
+            }
+          )
+
+          if (! /^[a-zA-Z0-9_]+$/.test(environment)) {
+            const error = `The name of the environment contains illegal characters: ${runner.environment}`;
+            core.error(error);
+            core.setFailed(error);
+          }
+
+          if (permissionRes.status !== 200) {
+            message = 'Permission check returns non-200 status: ${permissionRes.status}'
+            core.setOutput('error', message)
+            throw new Error(message)
+          }
+          const actorPermission = permissionRes.data.permission
+          if (!['admin', 'write'].includes(actorPermission)) {
+              message = '👋  @' + context.actor + ', seems as if you have not admin/write permission to /approve this PR, permissions: ${actorPermission}'
+              core.setOutput('error', message)
+              throw new Error(message)
+          }
+          core.setOutput('environment', environment)
+
+    - name: Pre-Check-Failed
+      id: precheck-failed
+      if: failure()
+      uses: actions/github-script@v3
+      env:
+        message: ${{steps.prechecks.outputs.error}}
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          const { message } = process.env;
+          github.issues.createComment({
+            ...context.repo,
+            issue_number: context.issue.number,
+            body: message
+          })
+
+  act-on-deprovisioning-request:
+    name: "Deprovision self hosted runner scale set"
+    needs: [prechecks]
+    runs-on: self-hosted
+    env:
+      TF_VAR_github_app_client_secret: ${{ secrets.APP_CLIENT_SECRET }}
+      TF_VAR_github_app_key_base64: ${{ secrets.APP_KEY_BASE64 }}
+      TF_VAR_github_app_id: ${{ secrets.APP_ID }}
+      TF_VAR_github_app_client_id: ${{ secrets.APP_CLIENT_ID }}
+      TF_VAR_github_enterprise_url: ${{ secrets.ENTERPRISE_SERVER_URL }}
+      TF_IN_AUTOMATION: true
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      environment: ${{needs.prechecks.outputs.environment}}
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Acknowledge self hosted runner deprovisioning request
+        id: acknowledge
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const log_url = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            const { environment } = process.env;
+            pr = await github.pulls.get(
+              {
+                ...context.repo,
+                pull_number: context.issue.number
+              }
+            )
+
+            if (pr.status !== 200) {
+              message = 'Could not retrieve PR info: ${permissionRes.status}'
+              core.setOutput('error', message)
+              throw new Error(message)
+            }
+
+            if (!pr.data.mergeable) {
+              message = 'This PR is currently not mergeable, please update it with the latest changes from the target branch.'
+              core.setOutput('error', message)
+              throw new Error(message)
+            }
+
+            github.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: '👋  @' + context.actor + ' deprovisioning self hosted runner scale set environment ' + environment + ' now, you can watch the progress [here](' + log_url + ') ...'
+            })
+
+            core.setOutput('ref', pr.data.head.ref)
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ steps.acknowledge.outputs.ref }}
+
+      - name: Setup node
+        uses: actions/setup-node@v2.1.2
+        with:
+          node-version: '12'
+
+      - name: HashiCorp - Setup Terraform
+        uses: hashicorp/setup-terraform@v1.3.2
+        with:
+          terraform_version: 0.14.5
+          terraform_wrapper: true
+
+      - name: Terraform Init AWS environment
+        id: init-aws
+        run:  cd actions-runner-envs-archived/$environment && terraform init
+
+      - name: Terraform Apply AWS environment changes
+        id: apply-changes
+        run: |
+          cd actions-runner-envs-archived/$environment
+          terraform destroy -no-color -input=false -auto-approve
+        continue-on-error: false
+
+      - name: Deprovisioning Succeeded
+        id: deprovisioning-succeeded
+        if: success()
+        uses: actions/github-script@v3
+        env:
+          CONFIG_APPLIED: ${{ steps.apply-changes.outputs.stdout }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const commentBody = `\
+            ### :computer: Self-hosted runner configuration deleted successfully :runner:
+
+            <details>
+            <summary>🚀 Configuration removed</summary>
+
+            \`\`\`
+            ${process.env.CONFIG_APPLIED}
+            \`\`\`
+            </details>
+
+            Merging this PR now ...
+            To create a new scale set configuration, open another issue.
+            `;
+
+            await github.issues.createComment({
+              ...context.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: commentBody
+            })
+
+            github.pulls.merge({
+              ...context.repo,
+              pull_number: context.issue.number
+            });
+
+      - name: Deprovisioning Failed
+        id: deprovisioning-failed
+        if: failure()
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const log_url = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+
+            github.issues.createComment({
+              ...context.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: `Self-hosted runner deprovision request failed :cry:. [View error logs](${ log_url}).`
+            })
+
+      # Force an unlock on the Terraform state file if we were cancelled or failed (probably really only needed for cancelled).
+      - name: Reveal Terraform Lock
+        id: reveal_terraform_lock
+        if: cancelled() || failure()
+        run: cd actions-runner-envs-archived/$environment && terraform force-unlock -force abc
+        continue-on-error: true
+
+      - name: Extract Terraform Lock ID
+        if: cancelled() || failure()
+        id: extract_lock
+        uses: actions/github-script@v3
+        env:
+          TERRAFORM_LOCK_OUTPUT: ${{ steps.reveal_terraform_lock.outputs.stderr }}
+        with:
+          lock_data: ${{ steps.reveal_terraform_lock.outputs.stderr }}
+          script: >
+            console.log(process.env.TERRAFORM_LOCK_OUTPUT);
+            console.log(core.getInput('lock_data'));
+
+            const matched = /Lock Info:\s*ID:\s*([a-z|0-9|-]*)/gm.exec(core.getInput('lock_data'));
+            if (matched) {
+              core.setOutput('lock_id', matched[1]);
+            }
+            core.setOutput('requires_unlock', !!matched);
+
+      - name: Unlock Terraform State
+        id: unlock_terraform_state
+        if: (cancelled() || failure()) && steps.extract_lock.outputs.requires_unlock == 'true'
+        run: cd actions-runner-envs-archived/$environment && terraform force-unlock -force ${{ steps.extract_lock.outputs.lock_id }}

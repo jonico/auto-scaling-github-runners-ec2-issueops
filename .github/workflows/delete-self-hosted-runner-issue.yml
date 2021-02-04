@@ -1,0 +1,102 @@
+name: IssueOps - Delete self-hosted runner scale set request
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  delete_archive_actions_runner_pr:
+    if: contains(github.event.issue.labels.*.name, 'delete-self-hosted-runner-scale-set')
+    name: Create self hosted runner deletion/archival PR
+
+    runs-on: self-hosted
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract Issue Demo Specification
+        id: issue_body
+        uses: peter-murray/issue-body-parser-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_id: ${{ github.event.issue.number }}
+
+      - name: Validate specification
+        id: validate_runner_params
+        uses: actions/github-script@v3
+        env:
+          ISSUE_PAYLOAD: ${{ steps.issue_body.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issuePayload = JSON.parse(process.env.ISSUE_PAYLOAD);
+
+            const runner = {
+              environment: issuePayload.environment,
+            };
+
+            if (! /^[a-zA-Z0-9_]+$/.test(runner.environment)) {
+              const error = `The name of the environment contains illegal characters: ${runner.environment}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            core.setOutput('runner_environment', runner.environment);
+
+      - name: Delete and archive actions-runner environment
+        id: create_actions-runner-environment
+        env:
+          RUNNER_ENVIRONMENT: ${{ steps.validate_runner_params.outputs.runner_environment }}
+        run: |
+          mkdir -p actions-runner-envs-archived/$RUNNER_ENVIRONMENT
+          rm -rf actions-runner-envs-archived/$RUNNER_ENVIRONMENT/*
+          mv actions-runner-envs/$RUNNER_ENVIRONMENT actions-runner-envs-archived/
+
+      - name: Create PR
+        id: create_pr
+        uses: peter-evans/create-pull-request@v3.7.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            branch: delete-archive-actions-runner-${{ steps.validate_runner_params.outputs.runner_environment }}
+            title: Delete and archive self hosted runner scale set for env ${{ steps.validate_runner_params.outputs.runner_environment }}
+            delete-branch: true
+            commit-message: "Archive AWS changes for runner scale set in env ${{ steps.validate_runner_params.outputs.runner_environment }}"
+            body: >
+              This PR contains the AWS changes needed to delete the self hosted runner scale set associated with environment ${{ steps.validate_runner_params.outputs.runner_environment }}
+
+              The PR has been initially created by and closes #${{ github.event.issue.number }} after successful merge.
+
+              If you are ok with the changes and have carefully reviewed them, please provide an `/approve` comment
+
+      - name: Report Success
+        id: report_success
+        if: success()
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: >
+            ### :computer: Self hosted runner deletion/archival request acknowledged :runner:
+
+
+            Please review and approve the following details and approve them in [this pull request](${{ steps.create_pr.outputs.pull-request-url }}).
+
+            * __Environment__: ${{ steps.validate_runner_params.outputs.runner_environment }}
+
+      - name: Report Failure
+        id: report_failure
+        if: failure()
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const log_url = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+
+            github.issues.createComment({
+              ...context.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: `Self-hosted runner deletion/archival request failed :cry:. [View error logs](${ log_url}).`
+            })

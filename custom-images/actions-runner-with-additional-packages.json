@@ -1,0 +1,33 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": ""
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "access_key": "{{user `aws_access_key`}}",
+      "secret_key": "{{user `aws_secret_key`}}",
+      "region": "eu-west-1",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "amzn2-ami-hvm-2.*-x86_64-ebs",
+          "root-device-type": "ebs"
+        },
+        "owners": "amazon",
+        "most_recent": true
+      },
+      "instance_type": "t3.micro",
+      "ssh_username": "ec2-user",
+      "ami_name": "actions-runner-with-additional-packages-{{timestamp}}",
+      "ami_regions": ["eu-west-1", "eu-west-2", "us-east-1", "us-east-2"]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": ["sudo amazon-linux-extras install epel -y", "sudo yum install stress -y" ]
+    }
+  ]
+}

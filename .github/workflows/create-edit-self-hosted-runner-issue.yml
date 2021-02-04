@@ -1,0 +1,186 @@
+name: IssueOps - Create self-hosted runner scale set request
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  create_edit_actions_runner_pr:
+    if: contains(github.event.issue.labels.*.name, 'self-hosted-runner-scale-set')
+    name: Create self hosted runner creation/update PR
+
+    runs-on: self-hosted
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Extract Issue Demo Specification
+        id: issue_body
+        uses: peter-murray/issue-body-parser-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_id: ${{ github.event.issue.number }}
+
+      - name: Validate specification
+        id: validate_runner_params
+        uses: actions/github-script@v3
+        env:
+          ISSUE_PAYLOAD: ${{ steps.issue_body.outputs.payload }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issuePayload = JSON.parse(process.env.ISSUE_PAYLOAD);
+
+            const runner = {
+              organization: issuePayload.organization,
+              environment: issuePayload.environment,
+              maxRunners: issuePayload.maxRunners,
+              minRunners: issuePayload.minRunners,
+              runnerGroup: issuePayload.runnerGroup,
+              amiFilter: issuePayload.amiFilter,
+              amiOwner: issuePayload.amiOwner
+            };
+
+
+            if (! /^[a-zA-Z0-9_]+$/.test(runner.environment)) {
+              const error = `The name of the environment contains illegal characters: ${runner.environment}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            if (! /^[a-zA-Z0-9-_]+$/.test(runner.organization)) {
+              const error = `The name of the organization contains illegal characters: ${runner.organization}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            if (! /^[0-9]+$/.test(runner.minRunners)) {
+              const error = `The min runners value has to be a number: ${runner.min_numbers}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            if (! /^[0-9]+$/.test(runner.maxRunners)) {
+              const error = `The max runners value has to be a number: ${runner.max_numbers}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            if (! /^[a-zA-Z0-9-_]+$/.test(runner.amiOwner)) {
+              const error = `The AMI owner contains illegal characters: ${runner.ami_owner}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+
+            if (! /^[a-zA-Z0-9-_\*]+$/.test(runner.amiOwner)) {
+              const error = `The AMI filter contains illegal characters: ${runner.ami_filter}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            if (! /^[a-zA-Z0-9-_]+$/.test(runner.group)) {
+              const error = `The name of the runner group contains illegal characters: ${runner.group}`;
+              core.error(error);
+              core.setFailed(error);
+            }
+
+            core.setOutput('runner_environment', runner.environment);
+            core.setOutput('runner_organization', runner.organization);
+            core.setOutput('runner_min_runners', runner.minRunners);
+            core.setOutput('runner_max_runners', runner.maxRunners);
+            core.setOutput('runner_runner_group', runner.runnerGroup);
+            core.setOutput('runner_ami_filter', runner.amiFilter);
+            core.setOutput('runner_ami_owner', runner.amiOwner);
+
+      - name: Create actions-runner environment
+        id: create_actions-runner-environment
+        env:
+          RUNNER_ENVIRONMENT: ${{ steps.validate_runner_params.outputs.runner_environment }}
+          RUNNER_MIN_REPLICAS: "${{ steps.validate_runner_params.outputs.runner_min_runners }}"
+          RUNNER_MAX_REPLICAS: "${{ steps.validate_runner_params.outputs.runner_max_runners }}"
+          RUNNER_ORGANIZATION: ${{ steps.validate_runner_params.outputs.runner_organization }}
+          RUNNER_AMI_FILTER: ${{ steps.validate_runner_params.outputs.runner_ami_filter }}
+          RUNNER_AMI_OWNER: ${{ steps.validate_runner_params.outputs.runner_ami_owner }}
+          RUNNER_GROUP: ${{ steps.validate_runner_params.outputs.runner_runner_group }}
+        run: |
+          mkdir -p actions-runner-envs/$RUNNER_ENVIRONMENT
+          for i in `ls actions-runner-envs/default/`; do envsubst < actions-runner-envs/default/$i > actions-runner-envs/$RUNNER_ENVIRONMENT/$i; done
+
+      - name: Create PR
+        id: create_pr
+        uses: peter-evans/create-pull-request@v3.7.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            branch: create-edit-actions-runner-${{ steps.validate_runner_params.outputs.runner_environment }}
+            title: Create or edit self hosted runner scale set for env ${{ steps.validate_runner_params.outputs.runner_environment }}
+            delete-branch: true
+            commit-message: "AWS changes for runner scale set in env ${{ steps.validate_runner_params.outputs.runner_environment }}"
+            body: >
+              This PR contains the AWS changes needed to create a self hosted runner scale set with the following characteristics:
+
+              * __Organization__: ${{ steps.validate_runner_params.outputs.runner_organization }}
+
+              * __Environment__: ${{ steps.validate_runner_params.outputs.runner_environment }}
+
+              * __MinRunners__: ${{ steps.validate_runner_params.outputs.runner_min_runners }}
+
+              * __MaxRunners__: ${{ steps.validate_runner_params.outputs.runner_max_runners }}
+
+              * __RunnerGroup__: ${{ steps.validate_runner_params.outputs.runner_runner_group }}
+
+              * __AMIFilter__: ${{ steps.validate_runner_params.outputs.runner_ami_filter }}
+
+              * __AMIOwner__: ${{ steps.validate_runner_params.outputs.runner_ami_owner }}
+
+              ![image](https://user-images.githubusercontent.com/1872314/106927306-52228b80-6712-11eb-9cb8-11e91d719b9a.png)
+
+              The PR has been initially created by and closes #${{ github.event.issue.number }} after successful merge.
+
+              If you are ok with the changes and have carefully reviewed them, please provide an `/approve` comment
+
+      - name: Report Success
+        id: report_success
+        if: success()
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: >
+            ### :computer: Self hosted runner creation/update request acknowledged :runner:
+
+
+            Please review and approve the following details and approve them in [this pull request](${{ steps.create_pr.outputs.pull-request-url }}).
+
+            * __Organization__: ${{ steps.validate_runner_params.outputs.runner_organization }}
+
+            * __Environment__: ${{ steps.validate_runner_params.outputs.runner_environment }}
+
+            * __MinRunners__: ${{ steps.validate_runner_params.outputs.runner_min_runners }}
+
+            * __MaxRunners__: ${{ steps.validate_runner_params.outputs.runner_max_runners }}
+
+            * __RunnerGroup__: ${{ steps.validate_runner_params.outputs.runner_runner_group }}
+
+            * __AMIFilter__: ${{ steps.validate_runner_params.outputs.runner_ami_filter }}
+
+            * __AMIOwner__: ${{ steps.validate_runner_params.outputs.runner_ami_owner }}
+
+
+      - name: Report Failure
+        id: report_failure
+        if: failure()
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const log_url = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+
+            github.issues.createComment({
+              ...context.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: `Self-hosted runner creation/update request failed :cry:. [View error logs](${ log_url}).`
+            })

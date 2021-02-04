@@ -1,0 +1,27 @@
+# state
+*.tfstate*
+
+actions-runner/**
+
+# Module directory
+.terraform/
+*.hcl
+
+# keys
+*id_rsa*
+
+# other
+.idea
+.DS_Store
+*.out
+example/*.secrets*.tfvars
+.envrc
+*.zip
+*.gz
+*.tgz
+*.env
+.vscode
+*.zip
+
+
+**/coverage/*
