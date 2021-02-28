@@ -1,4 +1,7 @@
 # setup-self-hosted-runner-aws-ec2
+
+[![awesome-runners](https://img.shields.io/badge/listed%20on-awesome--runners-blue.svg)](https://github.com/jonico/awesome-runners)
+
 IssueOps example on how to set up an autoscaling, self-hosted runner fleet in AWS using [philips-labs/terraform-aws-github-runner](https://github.com/philips-labs/terraform-aws-github-runner)
 
 ![Architecture](docs/component-overview.svg)
