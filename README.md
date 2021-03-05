@@ -40,7 +40,9 @@ If you like to setup a copy of this repository somewhere else, you would need to
 * AWS_ACCESS_KEY_ID: AWS access key id used to apply Terraform plans
 * AWS_SECRET_ACCESS_KEY: AWS secret access key used to apply the Terraform plans
 
-Furthermore, you would have to adopt [the Terraform state backend configuration](actions-runner-envs/default/backend.tf) to an S3 bucket and DynamoDB table of your choice and create a new GitHub App.
+Furthermore, you would have to adopt [the Terraform state backend configuration](actions-runner-envs/default/backend.tf) to an S3 bucket and DynamoDB table of your choice. A Terraform configuration that shows how to create your own S3 bucket and table can be found [here](bootstrap-terraform-state-bucket/).
+
+You also need to create a GitHub App as described in the next section.
 
 ### Needed issue labels
 
