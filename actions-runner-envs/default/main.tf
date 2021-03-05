@@ -10,7 +10,7 @@ resource "random_password" "random" {
 
 module "runners" {
   source  = "philips-labs/github-runner/aws"
-  version = "0.10.0"
+  version = "0.11.0"
 
   aws_region = local.aws_region
   vpc_id     = module.vpc.vpc_id
@@ -19,6 +19,8 @@ module "runners" {
   environment = local.environment
   tags = {
     Project = "octodemo-aws-github-runner-${RUNNER_ENVIRONMENT}"
+    Stop = "Never"
+    Terminate = "Never"
   }
 
   github_app = {
