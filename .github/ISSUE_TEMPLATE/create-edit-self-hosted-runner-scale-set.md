@@ -11,7 +11,7 @@ Issue created by this issue template will create or edit the necessary AWS confi
 Please insert the runner configuration values in the JSON below. It is advised but not mandatory that you create a runner group with the name of your environment first to control which repositories have access to your runner scale set.
 
 
-**Because this setup is still running on a private credit card, please do not set the number of `maxRunners` per environment greater than 3.**
+**In order to be mindful of resources, please do not set the number of `maxRunners` per environment greater than 10.**
 
 ```json
 {
