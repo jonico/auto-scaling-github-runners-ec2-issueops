@@ -1,5 +1,6 @@
 terraform {
   required_version = ">= 0.12, < 0.15"
+  # Uncomment once you ran terraform apply and have created your bucket and DB
   #backend "s3" {
   #  bucket = "terraform-state-jonico"
   #  key = "global/s3/terraform.tfstate"
