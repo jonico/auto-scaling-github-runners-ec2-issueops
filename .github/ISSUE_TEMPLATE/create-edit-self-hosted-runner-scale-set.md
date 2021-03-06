@@ -25,4 +25,9 @@ Please insert the runner configuration values in the JSON below. It is advised b
 }
 ```
 
+If you like to use the standard Amazon runners, set
+amiOwner to "amazon" and amiFilter to "amzn2-ami-hvm-2.*-x86_64-ebs"
+
+Environments should not contain the term "aws" (Amazon forbids that) and only contain numbers, characters and underscores.
+
 ![image](https://user-images.githubusercontent.com/1872314/106927306-52228b80-6712-11eb-9cb8-11e91d719b9a.png)
