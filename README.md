@@ -36,7 +36,7 @@ If you like to setup a copy of this repository somewhere else, you would need to
 * APP_KEY_BASE64: GitHub App private key, base64 encoded
 * APP_ID: GitHub App Id
 * APP_CLIENT_ID: GitHub App Client ID
-* ENTERPRISE_SERVER_URL: GitHub Enterprise Server URL
+* ENTERPRISE_SERVER_URL: GitHub Enterprise Server URL - leave blank if you are using GitHub.com
 * AWS_ACCESS_KEY_ID: AWS access key id used to apply Terraform plans
 * AWS_SECRET_ACCESS_KEY: AWS secret access key used to apply the Terraform plans
 
