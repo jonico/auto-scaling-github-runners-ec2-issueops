@@ -54,8 +54,8 @@ module "runners" {
   # Let the module manage the service linked role
   create_service_linked_role_spot = true
 
-  # use GitHub Enterprise url
-  ghes_url = var.github_enterprise_url
+  # use GitHub Enterprise url if set
+  ghes_url = var.github_enterprise_url != "" ? var.github_enterprise_url : null
 
   instance_type = var.instance_type
 
