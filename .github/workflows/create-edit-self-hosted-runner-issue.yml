@@ -9,7 +9,7 @@ jobs:
     if: contains(github.event.issue.labels.*.name, 'self-hosted-runner-scale-set')
     name: Create self hosted runner creation/update PR
 
-    runs-on: self-hosted
+    runs-on: Linux
 
     steps:
 

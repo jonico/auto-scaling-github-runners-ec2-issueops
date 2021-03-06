@@ -13,7 +13,7 @@ jobs:
     name: "Generate jobs for example"
     outputs:
       matrix: ${{ steps.generate-matrix.outputs.matrix }}
-    runs-on: [ self-hosted ]
+    runs-on: [ Linux ]
     steps:
       - name: generate-matrix
         id: generate-matrix

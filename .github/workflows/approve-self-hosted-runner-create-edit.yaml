@@ -7,7 +7,7 @@ jobs:
   prechecks:
     name: "Check pre-conditions for self hosted runner scale set creation/update"
     if: github.event.issue.pull_request != null && startsWith(github.event.issue.title, 'Create or edit self hosted runner scale set for env ') && startsWith(github.event.comment.body, '/approve')
-    runs-on: self-hosted
+    runs-on: Linux
     outputs:
       environment: ${{ steps.prechecks.outputs.environment }}
     steps:
@@ -85,7 +85,7 @@ jobs:
 
     timeout-minutes: 10
 
-    runs-on: self-hosted
+    runs-on: Linux
     steps:
 
       - name: Acknowledge self hosted runner provisioning request

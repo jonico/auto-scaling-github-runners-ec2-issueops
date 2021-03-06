@@ -7,7 +7,7 @@ jobs:
   prechecks:
     name: "Check pre-conditions for self hosted runner scale set deletion"
     if: github.event.issue.pull_request != null && startsWith(github.event.issue.title, 'Delete and archive self hosted runner scale set for env ') && startsWith(github.event.comment.body, '/approve')
-    runs-on: self-hosted
+    runs-on: Linux
     outputs:
       environment: ${{ steps.prechecks.outputs.environment }}
     steps:
@@ -78,7 +78,7 @@ jobs:
   act-on-deprovisioning-request:
     name: "Deprovision self hosted runner scale set"
     needs: [prechecks]
-    runs-on: self-hosted
+    runs-on: Linux
     env:
       TF_VAR_github_app_client_secret: ${{ secrets.APP_CLIENT_SECRET }}
       TF_VAR_github_app_key_base64: ${{ secrets.APP_KEY_BASE64 }}

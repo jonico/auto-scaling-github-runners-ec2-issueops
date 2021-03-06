@@ -9,7 +9,7 @@ jobs:
     if: contains(github.event.issue.labels.*.name, 'delete-self-hosted-runner-scale-set')
     name: Create self hosted runner deletion/archival PR
 
-    runs-on: self-hosted
+    runs-on: Linux
 
     steps:
 
