@@ -20,8 +20,8 @@ Please insert the runner configuration values in the JSON below. It is advised b
   "minRunners": "1",
   "maxRunners": "3",
   "runnerGroup": "default",
-  "amiFilter": "actions-runner-with-additional-packages-*",
-  "amiOwner": "869946923544"
+  "amiFilter": "amzn2-ami-hvm-2.*-x86_64-ebs",
+  "amiOwner": "amazon"
 }
 ```
 
